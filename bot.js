@@ -40,7 +40,7 @@ client.on('message', async msg => {
   if (step[chatId].stage === 2) {
     const order = `🚕 ЖАҢА ЗАКАЗ!\n📍 ${step[chatId].fromTo}\n📞 Клиент: ${text}\n👤 ${msg.from}`;
     // өзіңе жібер - номеріңді жаз
-    await client.sendMessage('77000000000@c.us', order); // <--- ОСЫ ЖЕРГЕ ӨЗ НОМЕРІҢДІ ЖАЗ 77... ФОРМАТТА
+    await client.sendMessage('77084816762@c.us', order); // <--- ОСЫ ЖЕРГЕ ӨЗ НОМЕРІҢДІ ЖАЗ 77... ФОРМАТТА
     await client.sendMessage(chatId, '✅ Заказ қабылданды! Таксист хабарласады.');
     delete step[chatId];
   }
