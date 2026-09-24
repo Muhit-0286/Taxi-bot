@@ -1,49 +1,47 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
+const QRCode = require('qrcode');
 
 const app = express();
-app.get('/', (req,res) => res.send('WhatsApp Taxi Bot is running'));
+let lastQR = '';
+
+app.get('/', async (req,res)=>{
+  if(lastQR){
+    const img = await QRCode.toDataURL(lastQR);
+    res.send(`<h1>WhatsApp QR - сканерле</h1><img src="${img}"><p>Ватсап -> Связанные устройства -> Привязка</p>`);
+  } else {
+    res.send('Bot іске қосылуда... 10 сек күт');
+  }
+});
 app.listen(process.env.PORT || 3000);
 
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: { args: ['--no-sandbox'] }
-});
+async function start(){
+  const { state, saveCreds } = await useMultiFileAuthState('auth');
+  const sock = makeWASocket({ auth: state, printQRInTerminal: true });
+  sock.ev.on('creds.update', saveCreds);
+  
+  sock.ev.on('connection.update', (u)=>{
+    const { qr, connection } = u;
+    if(qr){
+      lastQR = qr;
+      console.log('QR ДАЙЫН! Сайтқа кіріп көр: /');
+      qrcode.generate(qr, {small:true});
+    }
+    if(connection==='open') console.log('BOT ҚОСЫЛДЫ!');
+  });
 
-client.on('qr', qr => {
-  console.log('QR КОД ОСЫНДА:');
-  qrcode.generate(qr, {small: true});
-});
-
-client.on('ready', () => console.log('BOT ДАЙЫН!'));
-
-let step = {};
-
-client.on('message', async msg => {
-  const chatId = msg.from;
-  const text = msg.body.trim();
-
-  if (!step[chatId]) {
-    await client.sendMessage(chatId, '🚕 *Такси ботқа қош келдің!*\n\nҚайдан қайда барасың? Мысалы: Самалдан Мегаға');
-    step[chatId] = 1;
-    return;
-  }
-
-  if (step[chatId] === 1) {
-    step[chatId] = { fromTo: text };
-    await client.sendMessage(chatId, `✅ Маршрут: ${text}\n\nТелефон номеріңді жаз:`);
-    step[chatId] = {...step[chatId], stage: 2 };
-    return;
-  }
-
-  if (step[chatId].stage === 2) {
-    const order = `🚕 ЖАҢА ЗАКАЗ!\n📍 ${step[chatId].fromTo}\n📞 Клиент: ${text}\n👤 ${msg.from}`;
-    // өзіңе жібер - номеріңді жаз
-    await client.sendMessage('77084816762@c.us', order); // <--- ОСЫ ЖЕРГЕ ӨЗ НОМЕРІҢДІ ЖАЗ 77... ФОРМАТТА
-    await client.sendMessage(chatId, '✅ Заказ қабылданды! Таксист хабарласады.');
-    delete step[chatId];
-  }
-});
-
-client.initialize();
+  sock.ev.on('messages.upsert', async ({messages})=>{
+    const msg = messages[0];
+    if(!msg.message || msg.key.fromMe) return;
+    const from = msg.key.remoteJid;
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    
+    await sock.sendMessage(from, { text: `🚕 Заказ қабылданды: ${text}\nДиспетчер хабарласады!` });
+    
+    // саған заказ келеді - номеріңді жаз
+    const myNumber = '77084816762@s.whatsapp.net'; // <-- ОСЫНЫ ӨЗГЕРТ
+    await sock.sendMessage(myNumber, { text: `ЖАҢА ЗАКАЗ!\nКлиент: ${from}\nМаршрут: ${text}` });
+  });
+}
+start();
