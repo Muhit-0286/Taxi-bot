@@ -13,7 +13,7 @@ async function start(){
     if(u.connection==='open') console.log('BOT ҚОСЫЛДЫ!');
   });
   // ОСЫ ЖЕРГЕ ӨЗ НОМЕРІҢДІ ЖАЗ - мысалы 77071234567
-  const MY_NUMBER = '77071234567';
+  const MY_NUMBER = '77084816762';
   if(!sock.authState.creds.registered){
     const code = await sock.requestPairingCode(MY_NUMBER);
     codeText = code;
