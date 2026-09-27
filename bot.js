@@ -2,45 +2,118 @@ const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysocket
 const express = require('express');
 const app = express();
 
-let lastCode = 'Күту...';
-let connected = false;
+let qr = 'Дайындалуда...';
+let ok = false;
+app.get('/', (r,s)=> s.send(ok?'<h1>✅ ТАКСИ БОТ ҚОСЫЛДЫ</h1>':`<center><h2>WhatsApp > Связанные устройства > Привязать</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}"><script>setTimeout(()=>location.reload(),5000)</script></center>`));
+app.listen(process.env.PORT||3000);
 
-app.get('/', (req,res)=> res.send(`<h1 style="font-family:sans-serif;text-align:center;margin-top:50px">${connected?'✅ БОТ ҚОСЫЛДЫ':`КОД: <b style="font-size:70px;background:green;color:white;padding:20px">${lastCode}</b><br><br>Ватсап > Связанные устройства > Привязать по номеру телефона<br><br>Кодты енгіз. Номер: 7084816762`}</h1>`));
-app.listen(process.env.PORT || 3000);
+// === СЕНІҢ ПРАЙСЫҢ ===
+const PRAIS = `
+*1 БАҒЫТТАҒЫ ЖОЛ ЖҮРУ САЛОН БАҒАЛАРЫ (КҮНДІЗГІ 22.00-ге дейін):*
+
+ПОСТЫШЕВА 2А - 1500ТГ 2 адам макс
+Жанаталап-Жанадаур-Коянкус -> Гейт Сити 1500тг
+Жанаталап -> Хозяюшка 1200
+Жанадаур-Коянкус -> Рахат хозяюшка 1000
+Жанаталап-Жанадаур -> Кокжиек 2000тг
+Коянкус -> Кокжиек 1адам 2000 салон 2500
+Гейт Сити -> Кокжиек 1адам 2000 салон келисип
+Жанаталап-Жанадаур-Коянкус -> Пятелетка 1адам 2000 салон 2500
+Между 4 мкр - 1500тг
+Ауыл ішінде - 800-1000тг
+Жаңаталап - Жаңадәуір - 1000тг
+Жаңаталап - Ынтымақ - 1500тг
+Жаңаталап - Қоянқұс - 1500тг
+Жаңадәуір - Ынтымақ - 1000тг
+Жаңадәуір - Қоянқұс - 1200тг
+4 мкр - Трасса - 1500тг
+4 мкр - Магнум - 1500тг
+4 мкр - Гейт Сити Март - 1500 1 адам салон 2000
+4 мкр - Март ТРЦ - 2500 салон
+Талдықорған пятачок - 2000тг
+4 мкр - Шолохова-Сейфуллина - 2500тг
+4 мкр - Өтеген батыр ГРЭС Титова - 2000тг
+4 мкр - ГРЭС туда-обратно 30 мин - 4000тг
+4 мкр - Вокзал-1 - 2000 салон 2500
+4 мкр - Вокзал-2 - 3500 салон 3500-4000
+4 мкр - Алатау Жетіген - 6000тг
+4 мкр - Аэропорт - 3500тг
+Жаңа Қуат - 3000тг
+Өтеген батыр Ольга - 2500тг
+Гүлдер мкр - 2500тг
+Қызыл Ту - 3500тг
+Қарасу Табачка - 2500тг
+Байсерке Акимат - 2500-3000
+Еркін - 3000тг
+Құрылысшы - 2500тг
+Ащыбұлақ - 2500тг
+Кенжехан - 2500тг
+Барахолка - 2700тг
+Айнабұлақ - 2500тг
+Құлагер - 2800тг
+Шолохова базар - 2500тг
+Түрксіб базар - 2500тг
+4 роддом - 2500тг
+Папанина 4 гор больница - 3000тг
+Жасқанат - 3000тг
+Пожарка - 3000тг
+Роща - 3000тг
+Развилка - 3500тг
+Саялы, Шаңырақ - 3500-4000тг
+Халық Арена - 4000тг
+Алматы Арена - 4000тг
+Алғабас - 4000тг
+Ақбұлақ - 4000тг
+Сайран - 4500 салон 5000
+Саяхат - 4000 салон 4500
+Орбита, Абая, Аль-Фараби - 5500тг
+Алтынорда - 6000тг
+Шұғыла - 6000тг
+Гүлдала - 4000тг
+Бесағаш - 4500тг
+Тұздыбастау - 5000тг
+Талғар - 6000тг
+Ұзынағаш - 9000тг
+Қаскелең - 8000тг
+Апорт Кульджинка - 4000тг
+Апорт Молл - 6000тг
+Есік, Шелек - 9000тг
+Қонаев Қапшағай - 8500-9000тг
+Қараой - 4000тг
+Жаңашар - 7000тг
+Ават - 8000тг
+Жаңалық, Али - 4000тг
+Заречный - 7500тг
+Боралдай, Водник, Казцик - 3500тг
+Чапай - 5500тг
+Шамолған - 7500тг
+Думан - 4000тг
+Обл больница - 4000тг
+
+P.S Түнгі уақытта, кептелісте баға өзгеруі мүмкін
+`;
 
 async function start(){
-  const { state, saveCreds } = await useMultiFileAuthState('session');
-  const sock = makeWASocket({ auth: state, printQRInTerminal: false });
+  const { state, saveCreds } = await useMultiFileAuthState('sess');
+  const sock = makeWASocket({auth: state});
   sock.ev.on('creds.update', saveCreds);
-
-  sock.ev.on('connection.update', async ({connection, lastDisconnect})=>{
-    if(connection==='close'){
-      if(lastDisconnect?.error?.output?.statusCode!= 401){ start(); }
-    }
-    if(connection==='open'){ connected=true; console.log('OPEN'); }
+  sock.ev.on('connection.update', v=>{
+    if(v.qr) qr=v.qr;
+    if(v.connection==='open'){ ok=true; console.log('QOSYLDY'); }
+    if(v.connection==='close') setTimeout(start, 3000);
   });
 
-  if(!state.creds.registered){
-    setTimeout(async ()=>{
-      try{
-        // ВАЖНО: номер +сыз
-        const code = await sock.requestPairingCode('77084816762');
-        lastCode = code;
-        console.log('CODE:', code);
-      }catch(e){
-        console.log('ERROR CODE', e);
-        lastCode = 'Қате: ' + e.message + ' 10 сектан соң қайта...';
-        setTimeout(start, 10000);
-      }
-    }, 8000);
-  }
-
   sock.ev.on('messages.upsert', async ({messages})=>{
-    const m = messages[0];
-    if(!m.message ||!m.key.remoteJid.endsWith('@g.us')) return;
-    const t = m.message.conversation || '';
-    if(t.toLowerCase().includes('такси')){
-      await sock.sendMessage(m.key.remoteJid, {text: '✅ Бот дайын: '+t});
+    const m=messages[0]; if(!m.message||m.key.fromMe) return;
+    const jid=m.key.remoteJid;
+    const text=(m.message.conversation||m.message.extendedTextMessage?.text||'').toLowerCase();
+
+    if(text.includes('прайс')||text.includes('баға')||text.includes('цена')||text.includes('сколько')){
+      await sock.sendMessage(jid, {text: PRAIS});
+      return;
+    }
+    if(text.includes('такси')||text.includes('керек')||text.includes('грес')||text.includes('вокзал')||text.includes('аэропорт')){
+      await sock.sendMessage(jid, {text: `🚕 Заказ қабылданды: "${m.message.conversation||''}"\n\nБағаны білу үшін "прайс" деп жазыңыз.\nЖүргізушілер жауап береді.\n\n${PRAIS.slice(0,800)}...`});
     }
   });
 }
