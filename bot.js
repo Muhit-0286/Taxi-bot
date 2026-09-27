@@ -122,4 +122,11 @@ async function startBot(){
     }
   });
 }
-startBot();
+startBot(```setInterval(async ()=>{
+  if(sock && isConnected) {
+    try{
+      await sock.sendPresenceUpdate('available');
+      console.log('🟢 Ping sent');
+    }catch(e){}
+  }
+}, 5000);```);
