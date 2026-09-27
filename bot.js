@@ -1,10 +1,4 @@
-```const sock = makeWASocket({
-  auth: state,
-  printQRInTerminal: false,
-  connectTimeoutMs: 60 * 1000, // 1 минут
-  defaultQueryTimeoutMs: 60 * 1000, // 1 минут
-  keepAliveIntervalMs: 25 * 1000, // 25 секунд сайын пинг
-});```
+```const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');```
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
 const app = express();
