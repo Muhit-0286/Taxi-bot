@@ -1,120 +1,51 @@
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
 const app = express();
 
-let qr = 'Дайындалуда...';
-let ok = false;
-app.get('/', (r,s)=> s.send(ok?'<h1>✅ ТАКСИ БОТ ҚОСЫЛДЫ</h1>':`<center><h2>WhatsApp > Связанные устройства > Привязать</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}"><script>setTimeout(()=>location.reload(),5000)</script></center>`));
-app.listen(process.env.PORT||3000);
+let lastQr = '';
+let isConnected = false;
 
-// === СЕНІҢ ПРАЙСЫҢ ===
-const PRAIS = `
-*1 БАҒЫТТАҒЫ ЖОЛ ЖҮРУ САЛОН БАҒАЛАРЫ (КҮНДІЗГІ 22.00-ге дейін):*
+app.get('/', (req,res)=>{
+  if(isConnected) return res.send('<h1>✅ ТАКСИ БОТ ҚОСЫЛДЫ</h1><p>Енді группада "прайс" деп жаз - тест болады</p>');
+  if(lastQr) return res.send(`<center><h2>QR дайын - сканерле</h2><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(lastQr)}"><br><p>Ватсап > Связанные устройства > Привязать</p><script>setTimeout(()=>location.reload(),8000)</script></center>`);
+  res.send('<h2>Дайындалуда... 15 сек күтіп жаңарт</h2><script>setTimeout(()=>location.reload(),3000)</script>');
+});
+app.listen(process.env.PORT||3000, ()=>console.log('Server started'));
 
-ПОСТЫШЕВА 2А - 1500ТГ 2 адам макс
-Жанаталап-Жанадаур-Коянкус -> Гейт Сити 1500тг
-Жанаталап -> Хозяюшка 1200
-Жанадаур-Коянкус -> Рахат хозяюшка 1000
-Жанаталап-Жанадаур -> Кокжиек 2000тг
-Коянкус -> Кокжиек 1адам 2000 салон 2500
-Гейт Сити -> Кокжиек 1адам 2000 салон келисип
-Жанаталап-Жанадаур-Коянкус -> Пятелетка 1адам 2000 салон 2500
-Между 4 мкр - 1500тг
-Ауыл ішінде - 800-1000тг
-Жаңаталап - Жаңадәуір - 1000тг
-Жаңаталап - Ынтымақ - 1500тг
-Жаңаталап - Қоянқұс - 1500тг
-Жаңадәуір - Ынтымақ - 1000тг
-Жаңадәуір - Қоянқұс - 1200тг
-4 мкр - Трасса - 1500тг
-4 мкр - Магнум - 1500тг
-4 мкр - Гейт Сити Март - 1500 1 адам салон 2000
-4 мкр - Март ТРЦ - 2500 салон
-Талдықорған пятачок - 2000тг
-4 мкр - Шолохова-Сейфуллина - 2500тг
-4 мкр - Өтеген батыр ГРЭС Титова - 2000тг
-4 мкр - ГРЭС туда-обратно 30 мин - 4000тг
-4 мкр - Вокзал-1 - 2000 салон 2500
-4 мкр - Вокзал-2 - 3500 салон 3500-4000
-4 мкр - Алатау Жетіген - 6000тг
-4 мкр - Аэропорт - 3500тг
-Жаңа Қуат - 3000тг
-Өтеген батыр Ольга - 2500тг
-Гүлдер мкр - 2500тг
-Қызыл Ту - 3500тг
-Қарасу Табачка - 2500тг
-Байсерке Акимат - 2500-3000
-Еркін - 3000тг
-Құрылысшы - 2500тг
-Ащыбұлақ - 2500тг
-Кенжехан - 2500тг
-Барахолка - 2700тг
-Айнабұлақ - 2500тг
-Құлагер - 2800тг
-Шолохова базар - 2500тг
-Түрксіб базар - 2500тг
-4 роддом - 2500тг
-Папанина 4 гор больница - 3000тг
-Жасқанат - 3000тг
-Пожарка - 3000тг
-Роща - 3000тг
-Развилка - 3500тг
-Саялы, Шаңырақ - 3500-4000тг
-Халық Арена - 4000тг
-Алматы Арена - 4000тг
-Алғабас - 4000тг
-Ақбұлақ - 4000тг
-Сайран - 4500 салон 5000
-Саяхат - 4000 салон 4500
-Орбита, Абая, Аль-Фараби - 5500тг
-Алтынорда - 6000тг
-Шұғыла - 6000тг
-Гүлдала - 4000тг
-Бесағаш - 4500тг
-Тұздыбастау - 5000тг
-Талғар - 6000тг
-Ұзынағаш - 9000тг
-Қаскелең - 8000тг
-Апорт Кульджинка - 4000тг
-Апорт Молл - 6000тг
-Есік, Шелек - 9000тг
-Қонаев Қапшағай - 8500-9000тг
-Қараой - 4000тг
-Жаңашар - 7000тг
-Ават - 8000тг
-Жаңалық, Али - 4000тг
-Заречный - 7500тг
-Боралдай, Водник, Казцик - 3500тг
-Чапай - 5500тг
-Шамолған - 7500тг
-Думан - 4000тг
-Обл больница - 4000тг
+const PRAIS = `*ПРАЙС 4 мкр (күндіз 22:00 дейін):*\n4 мкр-Трасса 1500\n4 мкр-Магнум 1500\n4 мкр-Гейт Сити 1500/2000 салон\n4 мкр-ГРЭС 2000\n4 мкр-Аэропорт 3500\n4 мкр-Вокзал1 2000/2500\n4 мкр-Вокзал2 3500\n4 мкр-Жетіген 6000\nАуыл іші 800-1000\nЖаңаталап-Жаңадәуір 1000\nЖаңаталап-Ынтымақ 1500\nТолық прайсты білу үшін "толық прайс" деп жаз`;
 
-P.S Түнгі уақытта, кептелісте баға өзгеруі мүмкін
-`;
+const TOLIQ_PRAIS = `СЕНІҢ ТОЛЫҚ ПРАЙСЫҢ ОСЫНДА - алдыңғы хабарламадағы ұзын тізім - оны осы жерге қоясың`;
 
 async function start(){
   const { state, saveCreds } = await useMultiFileAuthState('sess');
-  const sock = makeWASocket({auth: state});
+  const sock = makeWASocket({ auth: state, printQRInTerminal: false });
+
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', v=>{
-    if(v.qr) qr=v.qr;
-    if(v.connection==='open'){ ok=true; console.log('QOSYLDY'); }
-    if(v.connection==='close') setTimeout(start, 3000);
+
+  sock.ev.on('connection.update', async (update)=>{
+    const { connection, lastDisconnect, qr } = update;
+    if(qr){ lastQr = qr; console.log('QR жаңарды'); }
+    if(connection === 'open'){ isConnected = true; lastQr=''; console.log('✅ ҚОСЫЛДЫ!'); }
+    if(connection === 'close'){
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log('Жабылып қалды, қайта қосылу:', shouldReconnect);
+      if(shouldReconnect){ isConnected=false; start(); }
+    }
   });
 
   sock.ev.on('messages.upsert', async ({messages})=>{
-    const m=messages[0]; if(!m.message||m.key.fromMe) return;
+    const m=messages[0]; if(!m.message || m.key.fromMe) return;
     const jid=m.key.remoteJid;
     const text=(m.message.conversation||m.message.extendedTextMessage?.text||'').toLowerCase();
+    const origText=m.message.conversation||m.message.extendedTextMessage?.text||'';
 
-    if(text.includes('прайс')||text.includes('баға')||text.includes('цена')||text.includes('сколько')){
-      await sock.sendMessage(jid, {text: PRAIS});
-      return;
+    if(text.includes('толық прайс')){ await sock.sendMessage(jid,{text:TOLIQ_PRAIS}); return; }
+    if(text.includes('прайс')||text.includes('баға')||text.includes('цена')){ await sock.sendMessage(jid,{text:PRAIS}); return; }
+
+    if(text.includes('такси')||text.includes('керек')){
+      await sock.sendMessage(jid,{text:`🚕 Заказ қабылданды: ${origText}\n\n${PRAIS}\n\nЖүргізушілер жауап береді...`});
     }
-    if(text.includes('такси')||text.includes('керек')||text.includes('грес')||text.includes('вокзал')||text.includes('аэропорт')){
-      await sock.sendMessage(jid, {text: `🚕 Заказ қабылданды: "${m.message.conversation||''}"\n\nБағаны білу үшін "прайс" деп жазыңыз.\nЖүргізушілер жауап береді.\n\n${PRAIS.slice(0,800)}...`});
-    }
+    if(text.startsWith('/алам')){ await sock.sendMessage(jid,{text:`✅ ${origText} қабылданды!`}); }
   });
 }
 start();
