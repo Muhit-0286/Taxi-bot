@@ -1,10 +1,11 @@
-```const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');```
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const makeWASocket = require('@whiskeysockets/baileys').default;
+const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
-const app = express();
-let lastQr='', isConnected=false, groups={}, zakazId=120, zakazy={};
 
-const PRAIS = `*🚕 ПРАЙС - 4 ы/а (Ынтымақ, Қоянқұс, Жаңадәуір, Жаңаталап) - САЛОН*
+const app = express();
+let lastQr = '', isConnected = false, groups = {}, zakazId = 120, zakazy = {};
+
+const PRAIS_TOLIQ = `*🚕 ПРАЙС - 4 ы/а (Ынтымақ, Қоянқұс, Жаңадәуір, Жаңаталап) - САЛОН*
 *КҮНДІЗ 22:00-ге дейін*
 
 📍 ТӨРТ АУЫЛ ІШІ:
@@ -20,7 +21,6 @@ const PRAIS = `*🚕 ПРАЙС - 4 ы/а (Ынтымақ, Қоянқұс, Жа�
 4 ы/а -> Гейт Сити / Март 1500 (1 адам) / 2000 салон
 4 ы/а -> Көкжиек 2000/2500 салон
 4 ы/а -> Пятелетка 2000/2500 салон
-4 ы/а -> Хозяюшка 1000-1200тг
 
 📍 ОРТА:
 4 ы/а -> ГРЭС 2000тг (Ары-бері 4000тг)
@@ -28,94 +28,100 @@ const PRAIS = `*🚕 ПРАЙС - 4 ы/а (Ынтымақ, Қоянқұс, Жа�
 4 ы/а -> Вокзал-2 3500/4000 багаж
 4 ы/а -> Аэропорт 3500тг
 4 ы/а -> Байсерке 2500/3000 салон
-4 ы/а -> Шолохова-Сейфуллина 2500тг
 
 📍 АЛЫС:
-Шолохова базары, Гүлдер, Айнабұлақ, Құрылысшы тб - 2500тг
-Құлагер 2800, Барахолка 2700
-Папанина, Жасқанат, Роща, Развилка 3000-3500тг
-Саялы, Халық Арена, Ақбұлақ, Гүлдала, Апорт Кульджинка, Жаңалық - 4000тг
-Сайран 4500/5000, Бесағаш 4500, Тұздыбастау 5000
-Орбита, Абая, Чапай 5500тг
-Алтынорда, Шұғыла, Алатау, Апорт Молл, Талғар, Бағанашыл - 6000тг
-Жаңашар 7000, Шамолған 7500, Ават/Қаскелең 8000, Қапшағай/Есік/Шелек 8500-9000тг
+Шолохова 2500тг, Құлагер 2800, Барахолка 2700
+Сайран 4500/5000, Алтынорда/Шұғыла 6000тг
+⚠️ Түнде 22:00-ден кейін +500-1000тг`;
 
-⚠️ Түнде 22:00-ден кейін +500-1000тг
-3-4 адам, багаж +500тг`;
-
-function getPrice(text){
-  const t=text.toLowerCase();
-  if(t.includes('грэс')||t.includes('өтеген')) return '2000тг (Ары-бері 4000тг)';
-  if(t.includes('гейт')||t.includes('март')) return '1500тг (1 адам) / 2000тг салон';
-  if(t.includes('трасса')||t.includes('магнум')) return '1500тг';
-  if(t.includes('көкжиек')||t.includes('кокжиек')) return '2000тг (1 адам) / 2500тг салон';
-  if(t.includes('пятачок')||t.includes('пятилетка')||t.includes('талдыкорган')) return '2000тг (1 адам) / 2500тг салон';
-  if(t.includes('вокзал-1')||t.includes('вокзал 1')) return '2000тг / 2500тг салон';
-  if(t.includes('вокзал-2')||t.includes('вокзал 2')) return '3500тг / 4000тг багаж';
-  if(t.includes('аэропорт')||t.includes('әуежай')) return '3500тг';
-  if(t.includes('байсерке')) return '2500тг / 3000тг салон';
-  if(t.includes('шолохова')&&t.includes('сейфуллина')) return '2500тг';
-  if(t.includes('ауыл іші')||t.includes('внутри')) return '800-1000тг';
-  return '1500тг (4 ауыл арасы - стандарт)';
+function getPraisPrice(text) {
+  const t = text.toLowerCase();
+  if (t.includes('грэс') || t.includes('өтеген')) return '2000тг (Ары-бері 4000тг)';
+  if (t.includes('гейт') || t.includes('март')) return '1500тг (1 адам) / 2000тг салон';
+  if (t.includes('трасса') || t.includes('магнум')) return '1500тг';
+  if (t.includes('көкжиек')) return '2000тг / 2500тг салон';
+  if (t.includes('пятилетка') || t.includes('пятачок')) return '2000тг / 2500тг салон';
+  if (t.includes('вокзал')) return '2000-3500тг';
+  if (t.includes('аэропорт')) return '3500тг';
+  return '1500тг (4 ауыл арасы)';
 }
 
-app.get('/', (req,res)=>{
-  if(isConnected) return res.send(`<h1>✅ ДИСПЕТЧЕР ҚОСЫЛДЫ</h1>`);
-  if(lastQr) return res.send(`<center><img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(lastQr)}"><script>setTimeout(()=>location.reload(),7000)</script></center>`);
+app.get('/', (req, res) => {
+  if (isConnected) return res.send('<h1>✅ БОТ ҚОСЫЛДЫ</h1><p>Прайс толық жұмыс істейді</p>');
+  if (lastQr) return res.send(`<img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(lastQr)}"><script>setTimeout(()=>location.reload(),8000)</script>`);
   res.send('Қосылуда...');
 });
-app.listen(process.env.PORT||3000);
+app.listen(process.env.PORT || 3000, () => console.log('Server start'));
 
-async function start(){
+async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
-  const sock = makeWASocket({ auth: state, printQRInTerminal:false });
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: false,
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000
+  });
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', async (u)=>{
-    if(u.qr) lastQr=u.qr;
-    if(u.connection==='open'){ isConnected=true; lastQr=''; const all=await sock.groupFetchAllParticipating(); for(let id in all) groups[id]=all[id].subject; }
-    if(u.connection==='close' && u.lastDisconnect?.error?.output?.statusCode!==DisconnectReason.loggedOut){ isConnected=false; start(); }
+  sock.ev.on('connection.update', async (u) => {
+    if (u.qr) lastQr = u.qr;
+    if (u.connection === 'open') {
+      isConnected = true; lastQr = '';
+      console.log('✅ WA қосылды');
+      const all = await sock.groupFetchAllParticipating();
+      for (let id in all) groups[id] = all[id].subject;
+      console.log('Группалар:', groups);
+    }
+    if (u.connection === 'close' && u.lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut) {
+      isConnected = false; startBot();
+    }
   });
 
-  sock.ev.on('messages.upsert', async ({messages})=>{
-    const m=messages[0]; if(!m.message||m.key.fromMe) return;
-    const jid=m.key.remoteJid; const part=m.key.participant;
-    const text=(m.message.conversation||m.message.extendedTextMessage?.text||'').trim();
-    const low=text.toLowerCase();
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const m = messages[0]; if (!m.message || m.key.fromMe) return;
+    const jid = m.key.remoteJid;
+    const part = m.key.participant;
+    const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
+    const low = text.toLowerCase();
+    if (!text) return;
 
-    const clientId=Object.keys(groups).find(id=>groups[id].includes('ГЕЙТ СИТИ'));
-    const driverId=Object.keys(groups).find(id=>groups[id].includes('Таксист'));
-    if(!clientId||!driverId) return;
+    const clientId = Object.keys(groups).find(id => groups[id].toLowerCase().includes('гейт') || groups[id].toLowerCase().includes('клиент'));
+    const driverId = Object.keys(groups).find(id => groups[id].toLowerCase().includes('таксист'));
 
-    if(low.includes('прайс')||low.includes('баға')||low.includes('цена')){
-      await sock.sendMessage(jid,{text:PRAIS}); return;
+    // 1. ПРАЙС ДЕСЕ ТОЛЫҚ ЖІБЕР
+    if (low.includes('прайс') || low.includes('баға') || low.includes('цена')) {
+      await sock.sendMessage(jid, { text: PRAIS_TOLIQ });
+      return;
     }
 
-    if(jid===clientId && (low.includes('такси')||low.includes('керек')||low.includes('жеткіз')||low.match(/\d+\s*тг/)||low.includes('грэс')||low.includes('гейт'))){
-      const clientPrice=text.match(/\d+\s*тг|\d+\s*теңге/i)?.[0]||'баға жазбаған';
-      const praisPrice=getPrice(text);
-      zakazId++; zakazy[zakazId]={text, clientPhone:part};
+    // 2. КЛИЕНТ ЗАКАЗ ЖАЗСА
+    if (clientId && jid === clientId) {
+      if (low.includes('такси') || low.includes('керек') || low.includes('жеткіз') || /\d+.*тг/.test(low) || low.includes('грэс') || low.includes('гейт')) {
+        const clientPrice = text.match(/\d+\s*тг|\d+\s*теңге|\d+\s*k/i)?.[0] || 'баға көрсетілмеген';
+        const praisPrice = getPraisPrice(text);
+        zakazId++; zakazy[zakazId] = { text, phone: part };
 
-      await sock.sendMessage(jid,{text:`✅ Заказ #${zakazId} қабылданды!\n👤 Сіздің бағаңыз: ${clientPrice}\n💰 Прайс бойынша: ${praisPrice}\n\nЖүргізуші ізделуде...`});
+        // Клиентке - өз бағасы + прайс бағасы
+        await sock.sendMessage(jid, {
+          text: `✅ Заказ #${zakazId} қабылданды!\n\n👤 Сіздің бағаңыз: ${clientPrice}\n💰 Прайс бағасы: ${praisPrice}\n\nЖүргізуші ізделуде...`
+        });
 
-      await sock.sendMessage(driverId,{
-        text:`🚕 ЖАҢА ЗАКАЗ #${zakazId}\n📍 ${text}\n👤 Клиент бағасы: ${clientPrice}\n💰 Прайс: ${praisPrice}\n📞 +${part?.split('@')[0]}\n\nАлу: /алам_${zakazId}`,
-        mentions:[part]
-      });
+        // Таксистке
+        if (driverId) {
+          await sock.sendMessage(driverId, {
+            text: `🚕 ЖАҢА ЗАКАЗ #${zakazId}\n📍 ${text}\n\n👤 Клиент бағасы: ${clientPrice}\n💰 Прайс бойынша: ${praisPrice}\n📞 +${part?.split('@')[0]}\n\nАлу үшін: /алам_${zakazId}`,
+            mentions: [part]
+          });
+        }
+      }
     }
 
-    if(jid===driverId && low.startsWith('/алам')){
-      const num=text.match(/\d+/)?.[0]; if(!num||!zakazy[num]) return;
-      const order=zakazy[num];
-      await sock.sendMessage(order.clientPhone||clientId,{text:`🚕 Заказ #${num} алды - ${m.pushName} жүргізуші, хабарласады!`});
-      await sock.sendMessage(driverId,{text:`✅ #${num} алдыңыз! Клиент: +${order.clientPhone?.split('@')[0]}`, mentions:[order.clientPhone]});
-      await sock.sendMessage(order.clientPhone,{text:`Сіздің #${num} заказыңызды алдым, шығып келе жатырмын - ${m.pushName}\n${PRAIS.split('\n').slice(0,3).join('\n')}`});
-    }
-
-    if(jid===driverId && low.includes('боспын')){
-      const place=text.replace(/боспын/gi,'').trim()||'ГРЕС';
-      const time=new Date().toLocaleTimeString('kk-KZ',{hour:'2-digit',minute:'2-digit'});
-      await sock.sendMessage(driverId,{text:`✅ ${m.pushName} БОС\n📍 ${place}\n⏰ ${time}`, mentions:[part]});
+    if (driverId && jid === driverId && low.startsWith('/алам')) {
+      const num = text.match(/\d+/)?.[0]; if (!num ||!zakazy[num]) return;
+      const order = zakazy[num];
+      await sock.sendMessage(clientId, { text: `🚕 Заказ #${num} ды ${m.pushName} алды, хабарласады!` });
+      await sock.sendMessage(driverId, { text: `✅ #${num} сізде! Клиент: +${order.phone?.split('@')[0]}` });
     }
   });
 }
-start();
+startBot();
