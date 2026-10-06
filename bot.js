@@ -51,27 +51,21 @@ async function startBot() {
     }
   }, 15000);
 
-  sock.ev.on('connection.update', async (u) => {
+    sock.ev.on('connection.update', async (u) => {
     if (u.qr) {
       lastQr = u.qr;
-    }
-
-    if (u.connection === 'open') {
-      isConnected = true;
-      lastQr = '';
-      try { await sock.groupAcceptInvite(INV_CLIENT); } catch (e) {}
-      try { await sock.groupAcceptInvite(INV_DRIVER); } catch (e) {}
-      console.log('✅ WhatsApp байланысы орнатылды!');
     }
 
     if (u.connection === 'close') {
       isConnected = false;
       const statusCode = u.lastDisconnect?.error?.output?.statusCode;
+      // Егер QR тайм-аут болып жабылса да, ботты қайта іске қосып, жаңа QR береді:
       if (statusCode !== DisconnectReason.loggedOut) {
-        setTimeout(startBot, 3000);
+        setTimeout(startBot, 2000);
       }
     }
   });
+
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
