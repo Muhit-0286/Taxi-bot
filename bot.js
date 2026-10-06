@@ -4,8 +4,8 @@ const express = require('express');
 const app = express();
 let lastQr = '', isConnected = false, zakazId = 120, zakazy = {};
 let sock;
-const INV_CLIENT = 'B80rTyvT9dvApmM12XeS4f';
-const INV_DRIVER = 'IwwPqGzMjT8LYyxeAcrGfu';
+const INV_CLIENT = 'Cyk6TnT8azd3gnB6hqv0aE';
+const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
 app.get('/', (req,res)=>{
