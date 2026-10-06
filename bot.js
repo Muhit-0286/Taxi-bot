@@ -1,7 +1,6 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
-const { exec } = require('child_process'); // Браузерді өзі ашу үшін
 
 const app = express();
 
@@ -15,7 +14,7 @@ const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
-// Браузерге шығатын бет
+// Браузерге шығатын веб-бет
 app.get('/', (req, res) => {
   if (isConnected) return res.send('<h1 style="color:green;text-align:center;margin-top:50px;">✅ БОТ ҚОСЫЛЫП ТҰР</h1>');
   if (lastQr) return res.send(`
@@ -32,24 +31,17 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
-// Операциялық жүйеге байланысты браузерді ашу функциясы
-function openBrowser(url) {
-  const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  exec(`${start} ${url}`);
-}
-
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
 
-    sock = makeWASocket({
+  sock = makeWASocket({
     auth: state,
     browser: ["Ubuntu", "Chrome", "22.04"],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
-    printQRInTerminal: true // Сервер логында QR-код көрінуі үшін TRUE жасаңыз
+    printQRInTerminal: false // Терминалдағы қисық QR-ды өшірдік
   });
-
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -59,18 +51,10 @@ async function startBot() {
     }
   }, 15000);
 
-  let browserOpened = false;
-
   sock.ev.on('connection.update', async (u) => {
     if (u.qr) {
       lastQr = u.qr;
-      
-      // QR-код дайын болғанда браузерді өзі 1 рет автоматты түрде ашады:
-      if (!browserOpened) {
-        browserOpened = true;
-        console.log('🌐 Браузер автоматты түрде ашылуда...');
-        openBrowser(`http://localhost:${PORT}`);
-      }
+      console.log('Жаңа QR-код дайын! Сервер сілтемесін браузерден ашыңыз.');
     }
 
     if (u.connection === 'open') {
