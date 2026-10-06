@@ -1,267 +1,163 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+global.crypto = require('crypto'); // 👈 Бұл жол "crypto is not defined" қатесін жояды
+
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
-const QRCode = require('qrcode'); // Браузерге QR шығару үшін
 
 const app = express();
+
+let lastQr = '', isConnected = false;
+let zakazId = 120;
+const zakazy = {};
+let sock;
+
+const INV_CLIENT = 'Cyk6TnT8azd3gnB6hqv0aE';
+const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
+
+const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
+
+app.get('/', (req, res) => {
+  if (isConnected) {
+    return res.send(`
+      <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
+        <h1 style="color:green;">✅ БОТ СӘТТІ ҚОСЫЛДЫ ЖӘНЕ ЖҰМЫС ИСТЕП ТҰР!</h1>
+      </div>
+    `);
+  }
+  if (lastQr) {
+    return res.send(`
+      <div style="text-align:center;margin-top:40px;font-family:sans-serif;">
+        <h2>WhatsApp арқылы QR-кодты сканерлеңіз:</h2>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}" style="border:2px solid #333;padding:10px;border-radius:8px;">
+        <p style="color:gray;">Сурет автоматты түрде жаңарып тұрады...</p>
+      </div>
+      <script>setTimeout(()=>location.reload(), 3000)</script>
+    `);
+  }
+  res.send(`
+    <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
+      <h2>Қосылу жүріп жатыр, күте тұрыңыз...</h2>
+      <script>setTimeout(()=>location.reload(), 3000)</script>
+    </div>
+  `);
+});
+
 const PORT = process.env.PORT || 3000;
-
-let currentQR = ''; // QR кодты сақтайтын айнымалы
-
-// Веб-беттен QR кодты немесе бот статусын көрсету
-app.get('/', async (req, res) => {
-    if (currentQR) {
-        try {
-            const qrImage = await QRCode.toDataURL(currentQR);
-            res.send(`
-                <div style="text-align: center; font-family: sans-serif; padding-top: 50px;">
-                    <h2>🚕 FastTaxi WhatsApp Бот</h2>
-                    <p>WhatsApp қосымшасымен мына QR-кодты сканерлеңіз:</p>
-                    <img src="${qrImage}" alt="QR Code" style="width: 300px; height: 300px;" />
-                    <p><small>Бетті жаңартсаңыз, жаңа QR шығады</small></p>
-                </div>
-            `);
-        } catch (err) {
-            res.send('QR-код генерациялауда қате шықты.');
-        }
-    } else {
-        res.send(`
-            <div style="text-align: center; font-family: sans-serif; padding-top: 50px;">
-                <h2>🚕 FastTaxi WhatsApp Бот белсенді жұмыс істеп тұр!</h2>
-                <p style="color: green; font-weight: bold;">✅ Бот WhatsApp-қа қосылған.</p>
-            </div>
-        `);
-    }
-});
-
-app.listen(PORT, () => {
-    console.log(`🌐 Веб-сервер PORT ${PORT} арқылы іске қосылды.`);
-});
-
-// Оперативті дерекқор
-const activeDrivers = new Map();
-const userStates = new Map();
+app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('baileys_auth_info');
+  const { state, saveCreds } = await useMultiFileAuthState('sess_stable');
 
-    const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false
-    });
+  sock = makeWASocket({
+    auth: state,
+    browser: ['Mac OS', 'Chrome', '121.0.0.0'],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
+    keepAliveIntervalMs: 10000,
+    qrTimeout: 60000,
+    printQRInTerminal: false
+  });
 
-    sock.ev.on('creds.update', saveCreds);
+  sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
+  sock.ev.on('connection.update', async (u) => {
+    const { connection, lastDisconnect, qr } = u;
 
-        if (qr) {
-            currentQR = qr; // QR-ді веб-бетке береміз
-            console.log('\n--- QR-КОД ЖАҢАРТЫЛДЫ (Браузерді де тексеріңіз) ---');
-            qrcode.generate(qr, { small: true });
+    if (qr) {
+      lastQr = qr;
+    }
+
+    if (connection === 'open') {
+      isConnected = true;
+      lastQr = '';
+      console.log('✅ WhatsApp байланысы орнатылды!');
+      try { await sock.groupAcceptInvite(INV_CLIENT); } catch (e) {}
+      try { await sock.groupAcceptInvite(INV_DRIVER); } catch (e) {}
+    }
+
+    if (connection === 'close') {
+      isConnected = false;
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      
+      console.log('⚠️ Қосылым үзілді. Қайта қосылу:', shouldReconnect);
+      
+      if (shouldReconnect) {
+        setTimeout(startBot, 3000);
+      }
+    }
+  });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    if (type !== 'notify') return;
+    const m = messages[0];
+    if (!m.message || m.key.fromMe) return;
+
+    const jid = m.key.remoteJid;
+    if (!jid.endsWith('@g.us')) return;
+
+    const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
+    if (!text || text.includes('ЖАНА ЗАКАЗ #')) return;
+
+    const low = text.toLowerCase();
+
+    if (low.includes('прайс') || low.includes('бага') || low.includes('баға')) {
+      await sock.sendMessage(jid, { text: PRAIS });
+      return;
+    }
+
+    if (low.includes('такси') || low.includes('керек') || /\d+\s*тг/.test(low)) {
+      zakazId++;
+      zakazy[zakazId] = { message: m, text: text, fromJid: jid };
+
+      await sock.sendMessage(jid, { text: `✅ Заказ #${zakazId} қабылданды!` });
+
+      const all = await sock.groupFetchAllParticipating().catch(() => null);
+      if (all) {
+        for (let g in all) {
+          if (g !== jid) {
+            await sock.sendMessage(g, {
+              text: `🚕 ЖАНА ЗАКАЗ #${zakazId}\n${text}\n\n👇 Алу үшін осы хабарламаға жауап (Reply) беріп "алам" немесе "+", "мен" деп жазыңыз.`
+            }).catch(() => {});
+          }
         }
+      }
+      return;
+    }
 
-        if (connection === 'close') {
-            currentQR = '';
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('🔴 Қосылым үзілді. Қайта қосылу:', shouldReconnect);
-            if (shouldReconnect) startBot();
-        } else if (connection === 'open') {
-            currentQR = ''; // Қосылған соң QR-ді өшіреміз
-            console.log('✅ «FastTaxi» боты WhatsApp-қа сәтті қосылды!');
+    let foundZakazId = null;
+
+    const quotedText = m.message.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
+                       m.message.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text || '';
+    
+    if (quotedText && quotedText.includes('ЖАНА ЗАКАЗ #')) {
+      const match = quotedText.match(/ЖАНА ЗАКАЗ #(\d+)/);
+      if (match) foundZakazId = match[1];
+    }
+
+    if (!foundZakazId) {
+      const matchNum = text.match(/\d+/);
+      if (matchNum && zakazy[matchNum[0]]) {
+        foundZakazId = matchNum[0];
+      }
+    }
+
+    if (foundZakazId) {
+      if (zakazy[foundZakazId]) {
+        const currentZakaz = zakazy[foundZakazId];
+        delete zakazy[foundZakazId];
+
+        await sock.sendMessage(jid, { text: `✅ Заказ #${foundZakazId} сізге берілді!`, quoted: m });
+
+        if (currentZakaz.fromJid) {
+          await sock.sendMessage(currentZakaz.fromJid, { 
+            text: `🚕 Заказ #${foundZakazId} бойынша жүргізуші табылды!` 
+          }).catch(() => {});
         }
-    });
-
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-
-        for (const msg of messages) {
-            if (!msg.message || msg.key.fromMe) continue;
-
-            const from = msg.key.remoteJid;
-            const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
-
-            if (!text) continue;
-
-            const reply = async (content) => {
-                await sock.sendMessage(from, { text: content });
-            };
-
-            let userState = userStates.get(from) || { step: 'IDLE', data: {} };
-
-            // МӘЗІР ЖӘНЕ БОТ ЛОГИКАСЫ
-            if (text.toLowerCase() === 'меню' || text.toLowerCase() === 'сәлем' || text.toLowerCase() === 'такси' || userState.step === 'IDLE') {
-                userStates.set(from, { step: 'MAIN_MENU', data: {} });
-                await reply(
-                    `🤖 *«FastTaxi» ботына кош келдіңіз!*\n\n` +
-                    `Таңдауды жасаңыз (нөмірді жазыңыз):\n` +
-                    `1️⃣ Такси іздеу (Клиент)\n` +
-                    `2️⃣ Линияға шығу (Жүргізуші)\n` +
-                    `3️⃣ Линиядан шығу (Жүргізуші)`
-                );
-                continue;
-            }
-
-            // 1. КЛИЕНТ
-            if (userState.step === 'MAIN_MENU' && text === '1') {
-                userStates.set(from, { step: 'CLIENT_SELECT_ROUTE', data: {} });
-                await reply(`📍 *Бағытты таңдаңыз:*\n\n1. Алматы — Қаскелең\n2. Алматы — Ұзынағаш`);
-                continue;
-            }
-
-            if (userState.step === 'CLIENT_SELECT_ROUTE') {
-                let route = text === '1' ? 'Алматы — Қаскелең' : text === '2' ? 'Алматы — Ұзынағаш' : '';
-                if (!route) {
-                    await reply('❌ Қате таңдау. 1 немесе 2 санын жіберіңіз.');
-                    continue;
-                }
-
-                const availableDrivers = [];
-                for (let [phone, driver] of activeDrivers.entries()) {
-                    if (driver.route === route && driver.seats > 0) {
-                        availableDrivers.push({ phone, ...driver });
-                    }
-                }
-
-                if (availableDrivers.length === 0) {
-                    userStates.set(from, { step: 'IDLE', data: {} });
-                    await reply(`⚠️ *${route}* бағыты бойынша қазіргі уақытта линияда жүргізуші жоқ.\n\nКейінірек қайталап көріңіз немесе қайта *«Меню»* деп жазыңыз.`);
-                    continue;
-                }
-
-                let listMsg = `🚘 *${route} бойынша активті жүргізушілер:*\n\n`;
-                availableDrivers.forEach((drv, index) => {
-                    listMsg += `*${index + 1}.* ⏰ Уақыты: ${drv.time} | 👥 Бос орын: ${drv.seats} | 💵 Бағасы: ${drv.price} тг\n`;
-                });
-                listMsg += `\nҚай жүргізушіге бронь жасайсыз? (Нөмірін жазыңыз: 1, 2...)`;
-
-                userStates.set(from, { step: 'CLIENT_SELECT_DRIVER', data: { route, availableDrivers } });
-                await reply(listMsg);
-                continue;
-            }
-
-            if (userState.step === 'CLIENT_SELECT_DRIVER') {
-                const driverIndex = parseInt(text) - 1;
-                const drivers = userState.data.availableDrivers;
-
-                if (isNaN(driverIndex) || driverIndex < 0 || driverIndex >= drivers.length) {
-                    await reply('❌ Тізімдегі дұрыс нөмірді таңдаңыз.');
-                    continue;
-                }
-
-                const selectedDriver = drivers[driverIndex];
-                userStates.set(from, { step: 'CLIENT_ENTER_SEATS', data: { ...userState.data, selectedDriver } });
-                await reply(`Керек орын санын жазыңыз (Максимум: ${selectedDriver.seats}):`);
-                continue;
-            }
-
-            if (userState.step === 'CLIENT_ENTER_SEATS') {
-                const requestedSeats = parseInt(text);
-                const driver = userState.data.selectedDriver;
-
-                if (isNaN(requestedSeats) || requestedSeats <= 0 || requestedSeats > driver.seats) {
-                    await reply(`❌ Қате сан. 1 мен ${driver.seats} аралығында сан жазыңыз.`);
-                    continue;
-                }
-
-                const currentDriverData = activeDrivers.get(driver.phone);
-                currentDriverData.seats -= requestedSeats;
-                activeDrivers.set(driver.phone, currentDriverData);
-
-                const clientPhoneFormatted = from.replace('@s.whatsapp.net', '');
-                await reply(
-                    `✅ *Бронь сәтті расталды!*\n\n` +
-                    `📍 Бағыт: ${driver.route}\n` +
-                    `👥 Таңдалған орын: ${requestedSeats}\n` +
-                    `⏰ Шығу уақыты: ${driver.time}\n` +
-                    `📞 Жүргізуші телефоны: +${driver.phone.replace('@s.whatsapp.net', '')}\n\n` +
-                    `Жүргізушіге хабарлама жіберілді!`
-                );
-
-                await sock.sendMessage(driver.phone, {
-                    text: `🔔 *ЖАҢА БРОНЬ!*\n\n📍 Бағыт: ${driver.route}\n👥 Тапсырыс берілген орын: ${requestedSeats}\n📞 Клиент телефоны: +${clientPhoneFormatted}\n📉 Қалған бос орын: ${currentDriverData.seats}`
-                });
-
-                userStates.set(from, { step: 'IDLE', data: {} });
-                continue;
-            }
-
-            // 2. ЖҮРГІЗУШІ
-            if (userState.step === 'MAIN_MENU' && text === '2') {
-                userStates.set(from, { step: 'DRIVER_SET_ROUTE', data: {} });
-                await reply(`🚘 *Линия ашу үшін бағытты таңдаңыз:*\n\n1. Алматы — Қаскелең\n2. Алматы — Ұзынағаш`);
-                continue;
-            }
-
-            if (userState.step === 'DRIVER_SET_ROUTE') {
-                let route = text === '1' ? 'Алматы — Қаскелең' : text === '2' ? 'Алматы — Ұзынағаш' : '';
-                if (!route) {
-                    await reply('❌ 1 немесе 2 санын таңдаңыз.');
-                    continue;
-                }
-                userStates.set(from, { step: 'DRIVER_SET_SEATS', data: { route } });
-                await reply('Көліктегі бос орын санын көрсетіңіз (1-ден 8-ге дейін):');
-                continue;
-            }
-
-            if (userState.step === 'DRIVER_SET_SEATS') {
-                const seats = parseInt(text);
-                if (isNaN(seats) || seats < 1 || seats > 8) {
-                    await reply('❌ Орын санын дұрыс жазыңыз (1-ден 8-ге дейін).');
-                    continue;
-                }
-                userStates.set(from, { step: 'DRIVER_SET_TIME', data: { ...userState.data, seats } });
-                await reply('Жөнелетін уақытты жазыңыз (мысалы: 15:30 немесе "Толғанда"):');
-                continue;
-            }
-
-            if (userState.step === 'DRIVER_SET_TIME') {
-                userStates.set(from, { step: 'DRIVER_SET_PRICE', data: { ...userState.data, time: text } });
-                await reply('1 орынның бағасын жазыңыз (тенгемен):');
-                continue;
-            }
-
-            if (userState.step === 'DRIVER_SET_PRICE') {
-                const price = parseInt(text);
-                if (isNaN(price) || price <= 0) {
-                    await reply('❌ Бағаны санмен дұрыс енгізіңіз.');
-                    continue;
-                }
-
-                const driverData = {
-                    route: userState.data.route,
-                    seats: userState.data.seats,
-                    time: userState.data.time,
-                    price: price
-                };
-
-                activeDrivers.set(from, driverData);
-                userStates.set(from, { step: 'IDLE', data: {} });
-
-                await reply(
-                    `✅ *Сіз линияға сәтті шықтыңыз!*\n\n` +
-                    `🟢 Статус: Линияда\n` +
-                    `📍 Бағыт: ${driverData.route}\n` +
-                    `👥 Бос орын: ${driverData.seats}\n` +
-                    `⏰ Уақыты: ${driverData.time}\n` +
-                    `💵 Бағасы: ${driverData.price} тг/орын\n\n` +
-                    `Линиядан шығу үшін *«3»* немесе *«Меню»* деп жазыңыз.`
-                );
-                continue;
-            }
-
-            // 3. ЛИНИЯДАН ШЫҒУ
-            if ((userState.step === 'MAIN_MENU' && text === '3') || text.toLowerCase() === 'выход') {
-                if (activeDrivers.has(from)) {
-                    activeDrivers.delete(from);
-                    await reply('🔴 Сіз линиядан шықтыңыз. Базадағы статусыңыз: *Оффлайн*.');
-                } else {
-                    await reply('⚠️ Сіз қазір линияда жоқсыз.');
-                }
-                userStates.set(from, { step: 'IDLE', data: {} });
-                continue;
-            }
-        }
-    });
+      } else {
+        await sock.sendMessage(jid, { text: `❌ Заказ #${foundZakazId} бұрын алынып қойған!`, quoted: m });
+      }
+    }
+  });
 }
 
 startBot();
