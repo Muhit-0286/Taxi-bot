@@ -41,14 +41,15 @@ function openBrowser(url) {
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
 
-  sock = makeWASocket({
+    sock = makeWASocket({
     auth: state,
     browser: ["Ubuntu", "Chrome", "22.04"],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
-    printQRInTerminal: false // Терминалдағы қисық QR-ды өшірдік
+    printQRInTerminal: true // Сервер логында QR-код көрінуі үшін TRUE жасаңыз
   });
+
 
   sock.ev.on('creds.update', saveCreds);
 
