@@ -1,6 +1,6 @@
-global.crypto = require('crypto'); // 👈 Бұл жол "crypto is not defined" қатесін жояды
+global.crypto = require('crypto');
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
 const express = require('express');
 
 const app = express();
@@ -30,7 +30,7 @@ app.get('/', (req, res) => {
         <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}" style="border:2px solid #333;padding:10px;border-radius:8px;">
         <p style="color:gray;">Сурет автоматты түрде жаңарып тұрады...</p>
       </div>
-      <script>setTimeout(()=>location.reload(), 3000)</script>
+      <script>setTimeout(()=>location.reload(), 4000)</script>
     `);
   }
   res.send(`
@@ -45,11 +45,12 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('sess_stable');
+  // Сессияны жаңадан таза бастау үшін 'sess_v1' қолданамыз
+  const { state, saveCreds } = await useMultiFileAuthState('sess_v1');
 
   sock = makeWASocket({
     auth: state,
-    browser: ['Mac OS', 'Chrome', '121.0.0.0'],
+    browser: Browsers.ubuntu('Desktop'), // 👈 РЕСМИ БРАУЗЕР ПРОФИЛІ (бұғаттауды айналып өтеді)
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
@@ -82,7 +83,7 @@ async function startBot() {
       console.log('⚠️ Қосылым үзілді. Қайта қосылу:', shouldReconnect);
       
       if (shouldReconnect) {
-        setTimeout(startBot, 3000);
+        setTimeout(startBot, 4000);
       }
     }
   });
