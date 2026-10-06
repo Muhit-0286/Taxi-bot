@@ -13,59 +13,75 @@ const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
+// Веб-интерфейс
 app.get('/', (req, res) => {
-  if (isConnected) return res.send('<h1 style="color:green;text-align:center;margin-top:50px;">✅ БОТ ҚОСЫЛЫП ТҰР</h1>');
-  if (lastQr) return res.send(`
+  if (isConnected) {
+    return res.send(`
+      <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
+        <h1 style="color:green;">✅ БОТ СӘТТІ ҚОСЫЛДЫ ЖӘНЕ ЖҰМЫС ИСТЕП ТҰР!</h1>
+        <p>Экраныды жауып қоя берсеңіз болады.</p>
+      </div>
+    `);
+  }
+  if (lastQr) {
+    return res.send(`
+      <div style="text-align:center;margin-top:40px;font-family:sans-serif;">
+        <h2>WhatsApp арқылы QR-кодты сканерлеңіз:</h2>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}" style="border:2px solid #333;padding:10px;border-radius:8px;">
+        <p style="color:gray;">Сурет автоматты түрде жаңарып тұрады...</p>
+      </div>
+      <script>setTimeout(()=>location.reload(), 3000)</script>
+    `);
+  }
+  res.send(`
     <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
-      <h2>WhatsApp арқылы осы QR-кодты сканерлеңіз:</h2>
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}">
-      <p style="color:gray;">Код әр 7 секунд сайын жаңарады...</p>
+      <h2>Қосылу жүріп жатыр, күте тұрыңыз...</h2>
+      <script>setTimeout(()=>location.reload(), 3000)</script>
     </div>
-    <script>setTimeout(()=>location.reload(),7000)</script>
   `);
-  res.send('<h2 style="text-align:center;margin-top:50px;">Қосылуда, күте тұрыңыз...</h2>');
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('sess');
+  // Жаңа сессия папкасын пайдаланамыз
+  const { state, saveCreds } = await useMultiFileAuthState('sess_final');
 
-    sock = makeWASocket({
+  sock = makeWASocket({
     auth: state,
     browser: Browsers.ubuntu('Desktop'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
-    qrTimeout: 60000, // 👈 QR-кодтың өмір сүру уақыты (60000 ms = 60 секунд)
+    qrTimeout: 60000,
     printQRInTerminal: false
   });
 
-
   sock.ev.on('creds.update', saveCreds);
 
-  setInterval(async () => {
-    if (sock && isConnected) {
-      try { await sock.sendPresenceUpdate('available'); } catch (e) {}
-    }
-  }, 15000);
-
-    sock.ev.on('connection.update', async (u) => {
+  sock.ev.on('connection.update', async (u) => {
     if (u.qr) {
       lastQr = u.qr;
+    }
+
+    if (u.connection === 'open') {
+      isConnected = true;
+      lastQr = '';
+      console.log('✅ WhatsApp байланысы орнатылды!');
+      try { await sock.groupAcceptInvite(INV_CLIENT); } catch (e) {}
+      try { await sock.groupAcceptInvite(INV_DRIVER); } catch (e) {}
     }
 
     if (u.connection === 'close') {
       isConnected = false;
       const statusCode = u.lastDisconnect?.error?.output?.statusCode;
-      // Егер QR тайм-аут болып жабылса да, ботты қайта іске қосып, жаңа QR береді:
+      // Сессиядан мүлдем шығып кетпесе, қайта қосылуға тырысады
       if (statusCode !== DisconnectReason.loggedOut) {
-        setTimeout(startBot, 2000);
+        setTimeout(startBot, 3000);
       }
     }
   });
-
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
