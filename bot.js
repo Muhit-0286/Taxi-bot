@@ -1,6 +1,5 @@
 const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
-const qrcode = require('qrcode-terminal');
 const QRCode = require('qrcode'); // Браузерге QR шығару үшін
 
 const app = express();
