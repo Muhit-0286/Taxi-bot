@@ -32,14 +32,16 @@ app.listen(PORT, () => console.log(`Сервер ${PORT} портында іск
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
 
-  sock = makeWASocket({
+    sock = makeWASocket({
     auth: state,
     browser: Browsers.ubuntu('Desktop'),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
+    qrTimeout: 60000, // 👈 QR-кодтың өмір сүру уақыты (60000 ms = 60 секунд)
     printQRInTerminal: false
   });
+
 
   sock.ev.on('creds.update', saveCreds);
 
