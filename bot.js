@@ -1,6 +1,7 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
+const { exec } = require('child_process'); // Браузерді өзі ашу үшін
 
 const app = express();
 
@@ -14,14 +15,14 @@ const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
-// QR-кодты осы веб-беттен (http://localhost:3000) көресіз:
+// Браузерге шығатын бет
 app.get('/', (req, res) => {
   if (isConnected) return res.send('<h1 style="color:green;text-align:center;margin-top:50px;">✅ БОТ ҚОСЫЛЫП ТҰР</h1>');
   if (lastQr) return res.send(`
-    <div style="text-align:center;margin-top:50px;">
+    <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
       <h2>WhatsApp арқылы осы QR-кодты сканерлеңіз:</h2>
       <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}">
-      <p>Код әр 7 секунд сайын жаңарады...</p>
+      <p style="color:gray;">Код әр 7 секунд сайын жаңарады...</p>
     </div>
     <script>setTimeout(()=>location.reload(),7000)</script>
   `);
@@ -29,11 +30,13 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`\n==================================================`);
-  console.log(`👉 Браузерді ашып, мына сілтемеге өтіңіз: http://localhost:${PORT}`);
-  console.log(`==================================================\n`);
-});
+app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
+
+// Операциялық жүйеге байланысты браузерді ашу функциясы
+function openBrowser(url) {
+  const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+  exec(`${start} ${url}`);
+}
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
@@ -55,10 +58,18 @@ async function startBot() {
     }
   }, 15000);
 
+  let browserOpened = false;
+
   sock.ev.on('connection.update', async (u) => {
     if (u.qr) {
       lastQr = u.qr;
-      console.log('Жаңа QR-код дайын! Браузерді ашыңыз: http://localhost:3000');
+      
+      // QR-код дайын болғанда браузерді өзі 1 рет автоматты түрде ашады:
+      if (!browserOpened) {
+        browserOpened = true;
+        console.log('🌐 Браузер автоматты түрде ашылуда...');
+        openBrowser(`http://localhost:${PORT}`);
+      }
     }
 
     if (u.connection === 'open') {
@@ -87,9 +98,7 @@ async function startBot() {
     if (!jid.endsWith('@g.us')) return;
 
     const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
-    if (!text) return;
-
-    if (text.includes('ЖАНА ЗАКАЗ #')) return;
+    if (!text || text.includes('ЖАНА ЗАКАЗ #')) return;
 
     const low = text.toLowerCase();
 
@@ -99,7 +108,7 @@ async function startBot() {
       return;
     }
 
-    // 2. ЖАҢА ЗАКАЗ ТҮСУІ
+    // 2. ЖАҢА ЗАКАЗ
     if (low.includes('такси') || low.includes('керек') || /\d+\s*тг/.test(low)) {
       zakazId++;
       zakazy[zakazId] = { message: m, text: text, fromJid: jid };
