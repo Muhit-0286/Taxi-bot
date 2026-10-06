@@ -2,9 +2,9 @@
   "name": "whatsapp-taxi-bot",
   "version": "1.0.0",
   "description": "WhatsApp Taxi Dispatch Bot",
-  "main": "index.js",
+  "main": "bot.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node bot.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.0",
