@@ -1,6 +1,7 @@
 const makeWASocket = require('@whiskeysockets/baileys').default;
 const { useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
+
 const app = express();
 
 let lastQr = '', isConnected = false;
@@ -13,27 +14,38 @@ const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
+// QR-кодты осы веб-беттен (http://localhost:3000) көресіз:
 app.get('/', (req, res) => {
-  if (isConnected) return res.send('<h1>✅ БОТ ҚОСЫЛЫП ТҰР</h1>');
-  if (lastQr) return res.send(`<img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}"><script>setTimeout(()=>location.reload(),7000)</script>`);
-  res.send('Қосылуда...');
+  if (isConnected) return res.send('<h1 style="color:green;text-align:center;margin-top:50px;">✅ БОТ ҚОСЫЛЫП ТҰР</h1>');
+  if (lastQr) return res.send(`
+    <div style="text-align:center;margin-top:50px;">
+      <h2>WhatsApp арқылы осы QR-кодты сканерлеңіз:</h2>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}">
+      <p>Код әр 7 секунд сайын жаңарады...</p>
+    </div>
+    <script>setTimeout(()=>location.reload(),7000)</script>
+  `);
+  res.send('<h2 style="text-align:center;margin-top:50px;">Қосылуда, күте тұрыңыз...</h2>');
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
+app.listen(PORT, () => {
+  console.log(`\n==================================================`);
+  console.log(`👉 Браузерді ашып, мына сілтемеге өтіңіз: http://localhost:${PORT}`);
+  console.log(`==================================================\n`);
+});
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState('sess');
 
   sock = makeWASocket({
-  auth: state,
-  browser: ["Ubuntu", "Chrome", "22.04"],
-  connectTimeoutMs: 60000,
-  defaultQueryTimeoutMs: 0,
-  keepAliveIntervalMs: 10000,
-  printQRInTerminal: false // Өшіру
-});
-
+    auth: state,
+    browser: ["Ubuntu", "Chrome", "22.04"],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
+    keepAliveIntervalMs: 10000,
+    printQRInTerminal: false // Терминалдағы қисық QR-ды өшірдік
+  });
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -44,7 +56,10 @@ async function startBot() {
   }, 15000);
 
   sock.ev.on('connection.update', async (u) => {
-    if (u.qr) lastQr = u.qr;
+    if (u.qr) {
+      lastQr = u.qr;
+      console.log('Жаңа QR-код дайын! Браузерді ашыңыз: http://localhost:3000');
+    }
 
     if (u.connection === 'open') {
       isConnected = true;
@@ -104,10 +119,9 @@ async function startBot() {
       return;
     }
 
-    // 3. ТАПСЫРЫСТЫ АЛУ (ЖҮРГІЗҮШІЛЕР ҮШІН)
+    // 3. ТАПСЫРЫСТЫ АЛУ
     let foundZakazId = null;
 
-    // А) Жүргізуші заказ хабарламасын REPLY (цитата) етіп жауап берсе:
     const quotedText = m.message.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
                        m.message.extendedTextMessage?.contextInfo?.quotedMessage?.extendedTextMessage?.text || '';
     
@@ -116,7 +130,6 @@ async function startBot() {
       if (match) foundZakazId = match[1];
     }
 
-    // Б) Немесе егер жай санын жазса (мысалы: "алам 121", "мен 121", "121 алам", "121"):
     if (!foundZakazId) {
       const matchNum = text.match(/\d+/);
       if (matchNum && zakazy[matchNum[0]]) {
@@ -124,17 +137,13 @@ async function startBot() {
       }
     }
 
-    // Егер заказ табылса:
     if (foundZakazId) {
       if (zakazy[foundZakazId]) {
-        // Тапсырысты өшіреміз (басқа ешкім ала алмайды)
         const currentZakaz = zakazy[foundZakazId];
         delete zakazy[foundZakazId];
 
-        // Жүргізушіге жауап
         await sock.sendMessage(jid, { text: `✅ Заказ #${foundZakazId} сізге берілді!`, quoted: m });
 
-        // Клиенттің тобына хабарлау
         if (currentZakaz.fromJid) {
           await sock.sendMessage(currentZakaz.fromJid, { 
             text: `🚕 Заказ #${foundZakazId} бойынша жүргізуші табылды!` 
