@@ -30,7 +30,7 @@ app.get('/', (req, res) => {
         <img src="https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(lastQr)}" style="border:2px solid #333;padding:10px;border-radius:8px;">
         <p style="color:gray;">Сурет автоматты түрде жаңарып тұрады...</p>
       </div>
-      <script>setTimeout(()=>location.reload(), 4000)</script>
+      <script>setTimeout(()=>location.reload(), 5000)</script>
     `);
   }
   res.send(`
@@ -45,16 +45,16 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
 async function startBot() {
-  // Сессияны жаңадан таза бастау үшін 'sess_v1' қолданамыз
-  const { state, saveCreds } = await useMultiFileAuthState('sess_v1');
+  // Жаңа таза сессия папкасы
+  const { state, saveCreds } = await useMultiFileAuthState('sess_clean');
 
   sock = makeWASocket({
     auth: state,
-    browser: Browsers.ubuntu('Desktop'), // 👈 РЕСМИ БРАУЗЕР ПРОФИЛІ (бұғаттауды айналып өтеді)
-    connectTimeoutMs: 60000,
+    browser: Browsers.ubuntu('Desktop'),
+    connectTimeoutMs: 120000,      // Таймаутты 2 минутқа создық
     defaultQueryTimeoutMs: 0,
-    keepAliveIntervalMs: 10000,
-    qrTimeout: 60000,
+    keepAliveIntervalMs: 30000,     // Серверді ұстап тұру аралығы
+    qrTimeout: 90000,
     printQRInTerminal: false
   });
 
@@ -70,7 +70,7 @@ async function startBot() {
     if (connection === 'open') {
       isConnected = true;
       lastQr = '';
-      console.log('✅ WhatsApp байланысы орнатылды!');
+      console.log('✅ WhatsApp байланысы сәтті орнатылды!');
       try { await sock.groupAcceptInvite(INV_CLIENT); } catch (e) {}
       try { await sock.groupAcceptInvite(INV_DRIVER); } catch (e) {}
     }
@@ -80,10 +80,11 @@ async function startBot() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       
-      console.log('⚠️ Қосылым үзілді. Қайта қосылу:', shouldReconnect);
+      console.log('⚠️ Қосылым үзілді. 10 секундтан кейін қайта тырысады...', statusCode);
       
       if (shouldReconnect) {
-        setTimeout(startBot, 4000);
+        // WhatsApp спам деп бұғаттамас үшін 10 секунд кідіріспен қайта қосыламыз
+        setTimeout(startBot, 10000);
       }
     }
   });
@@ -101,11 +102,13 @@ async function startBot() {
 
     const low = text.toLowerCase();
 
+    // 1. ПРАЙС
     if (low.includes('прайс') || low.includes('бага') || low.includes('баға')) {
       await sock.sendMessage(jid, { text: PRAIS });
       return;
     }
 
+    // 2. ЖАҢА ЗАКАЗ
     if (low.includes('такси') || low.includes('керек') || /\d+\s*тг/.test(low)) {
       zakazId++;
       zakazy[zakazId] = { message: m, text: text, fromJid: jid };
@@ -125,6 +128,7 @@ async function startBot() {
       return;
     }
 
+    // 3. ТАПСЫРЫСТЫ АЛУ
     let foundZakazId = null;
 
     const quotedText = m.message.extendedTextMessage?.contextInfo?.quotedMessage?.conversation ||
