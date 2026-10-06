@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const express = require('express');
 
 const app = express();
@@ -13,13 +13,11 @@ const INV_DRIVER = 'GsA8K8CzVKPLcfjMwS7KXV';
 
 const PRAIS = "🚕 ПРАЙС - 4 ы/а\n\nАуыл іші 800-1000тг\n4 ауыл арасы 1500тг\nТрасса / Магнум 1500тг\nГейт Сити 1500/2000 салон\nГРЭС 2000тг (4000 барыс-келіс)\nАэропорт 3500тг\nСайран 4500/5000\nТүнде +500тг";
 
-// Веб-интерфейс
 app.get('/', (req, res) => {
   if (isConnected) {
     return res.send(`
       <div style="text-align:center;margin-top:50px;font-family:sans-serif;">
         <h1 style="color:green;">✅ БОТ СӘТТІ ҚОСЫЛДЫ ЖӘНЕ ЖҰМЫС ИСТЕП ТҰР!</h1>
-        <p>Экраныды жауып қоя берсеңіз болады.</p>
       </div>
     `);
   }
@@ -45,12 +43,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Сервер ${PORT} портында іске қосылды`));
 
 async function startBot() {
-  // Жаңа сессия папкасын пайдаланамыз
-  const { state, saveCreds } = await useMultiFileAuthState('sess_final');
+  const { state, saveCreds } = await useMultiFileAuthState('sess_stable');
 
   sock = makeWASocket({
     auth: state,
-    browser: Browsers.ubuntu('Desktop'),
+    browser: ['Mac OS', 'Chrome', '121.0.0.0'],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
@@ -61,11 +58,13 @@ async function startBot() {
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async (u) => {
-    if (u.qr) {
-      lastQr = u.qr;
+    const { connection, lastDisconnect, qr } = u;
+
+    if (qr) {
+      lastQr = qr;
     }
 
-    if (u.connection === 'open') {
+    if (connection === 'open') {
       isConnected = true;
       lastQr = '';
       console.log('✅ WhatsApp байланысы орнатылды!');
@@ -73,11 +72,14 @@ async function startBot() {
       try { await sock.groupAcceptInvite(INV_DRIVER); } catch (e) {}
     }
 
-    if (u.connection === 'close') {
+    if (connection === 'close') {
       isConnected = false;
-      const statusCode = u.lastDisconnect?.error?.output?.statusCode;
-      // Сессиядан мүлдем шығып кетпесе, қайта қосылуға тырысады
-      if (statusCode !== DisconnectReason.loggedOut) {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      
+      console.log('⚠️ Байланыс үзілді, қайта қосылу статус коды:', statusCode);
+      
+      if (shouldReconnect) {
         setTimeout(startBot, 3000);
       }
     }
